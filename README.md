@@ -4,35 +4,38 @@ Weio is operated by AI agents under human ownership; these tools were prepared b
 
 Two local Python MCP servers find missing or inconsistent evidence in caller-supplied OAuth test assertions and release identifiers. No Weio account is required. The tools do not contact a provider, deployment or Weio service.
 
-This repository distributes the **0.1.0a3 alpha** as a wheel and a source archive. This is not a PyPI publication. The source archive contains the Python source tree and tests; unpack it before attempting a source installation. The frozen package retains its Private :: Do Not Upload classifier.
+This repository distributes the **0.1.0a4 alpha** as a wheel and a source archive. This is not a PyPI publication. The source archive contains the Python source tree and tests; unpack it before attempting a source installation. The frozen package retains its Private :: Do Not Upload classifier.
+
+Changes in 0.1.0a4:
+In the Linux/Python 3.12 regression tests, both MCP servers returned a parse error for an invalid UTF-8 line and answered the following ping. Production Provenance now uses the same secret-rejection patterns as Connector Readiness, including JWT-shaped values. These cases were exercised against the wheel and both standalone Linux bundles.
 
 ## Install from the release
 
 Requires Python 3.10 or later. On Debian and Ubuntu, `python3 -m venv` also needs the `python3-venv` package. On Linux with GNU coreutils, in an empty directory:
 
 ```sh
-curl -fLO https://github.com/weioai/weio-evidence-checks/releases/download/v0.1.0-alpha.3/weio_evidence_checks-0.1.0a3-py3-none-any.whl &&
-curl -fLO https://github.com/weioai/weio-evidence-checks/releases/download/v0.1.0-alpha.3/SHA256SUMS &&
-grep -E '^[0-9a-f]{64}  weio_evidence_checks-0\.1\.0a3-py3-none-any\.whl$' SHA256SUMS | sha256sum --check --strict - &&
+curl -fLO https://github.com/weioai/weio-evidence-checks/releases/download/v0.1.0-alpha.4/weio_evidence_checks-0.1.0a4-py3-none-any.whl &&
+curl -fLO https://github.com/weioai/weio-evidence-checks/releases/download/v0.1.0-alpha.4/SHA256SUMS &&
+grep -E '^[0-9a-f]{64}  weio_evidence_checks-0\.1\.0a4-py3-none-any\.whl$' SHA256SUMS | sha256sum --check --strict - &&
 python3 -m venv .venv &&
 . .venv/bin/activate &&
-python -m pip install ./weio_evidence_checks-0.1.0a3-py3-none-any.whl &&
+python -m pip install ./weio_evidence_checks-0.1.0a4-py3-none-any.whl &&
 weio-connector-readiness --help &&
 weio-connector-readiness --self-test &&
 weio-production-provenance --self-test &&
 weio-production-provenance --example
 ```
 
-`sha256sum` must print `weio_evidence_checks-0.1.0a3-py3-none-any.whl: OK`. If a download fails or the wheel does not match `SHA256SUMS`, the commands stop there and pip does not run. The wheel's SHA-256 is:
+`sha256sum` must print `weio_evidence_checks-0.1.0a4-py3-none-any.whl: OK`. If a download fails or the wheel does not match `SHA256SUMS`, the commands stop there and pip does not run. The wheel's SHA-256 is:
 
 ```text
-a654cefc6c4ebc730cc8aafaa5b5a27ebacff013cd576c9f80ff4328dca0241f
+e4a8c4332c036e2bfe8155b38960998fa96349e42e8034404511312a576fa27e
 ```
 
-No runtime Python dependencies are declared. For source installation, unpack the [source archive](https://github.com/weioai/weio-evidence-checks/releases/download/v0.1.0-alpha.3/weio_evidence_checks-0.1.0a3.tar.gz), enter its extracted directory and run `python -m pip install .`; that route may fetch the setuptools build dependency. Source archive SHA-256:
+No runtime Python dependencies are declared. For source installation, unpack the [source archive](https://github.com/weioai/weio-evidence-checks/releases/download/v0.1.0-alpha.4/weio_evidence_checks-0.1.0a4.tar.gz), enter its extracted directory and run `python -m pip install .`; that route may fetch the setuptools build dependency. Source archive SHA-256:
 
 ```text
-e2ec84a2a7d984105eef1568d72dbef5dbf8f628291f8d65757ff4ef94c5777f
+e9d78eab8c976b2e229c1daacf00cc2bc291763e910af2e2a3cf2a7c0591ca80
 ```
 
 ## Connect an agent
@@ -109,4 +112,4 @@ MIT licensed. Weio is operated by AI agents under human ownership. [weio.ai](htt
 
 ## Linux MCP bundles
 
-The [alpha release](https://github.com/weioai/weio-evidence-checks/releases/tag/v0.1.0-alpha.3) also supplies separate `.mcpb` bundles for [Connector Readiness](https://github.com/weioai/weio-evidence-checks/releases/download/v0.1.0-alpha.3/weio-connector-readiness-0.1.0-alpha.3.mcpb) and [Production Provenance](https://github.com/weioai/weio-evidence-checks/releases/download/v0.1.0-alpha.3/weio-production-provenance-0.1.0-alpha.3.mcpb). Bundle checksums are in the release's SHA256SUMS file. These bundles require Python 3.10+ and have been exercised on Linux only. Named desktop-client compatibility has not been verified. Each server reports serverInfo.version 0.1.0; the package and bundle versions identify this repaired alpha.
+The [alpha release](https://github.com/weioai/weio-evidence-checks/releases/tag/v0.1.0-alpha.4) also supplies separate `.mcpb` bundles for [Connector Readiness](https://github.com/weioai/weio-evidence-checks/releases/download/v0.1.0-alpha.4/weio-connector-readiness-0.1.0-alpha.4.mcpb) and [Production Provenance](https://github.com/weioai/weio-evidence-checks/releases/download/v0.1.0-alpha.4/weio-production-provenance-0.1.0-alpha.4.mcpb). Bundle checksums are in the release's SHA256SUMS file. These bundles require Python 3.10+ and have been exercised on Linux only. Named desktop-client compatibility has not been verified. Each server reports its package version as serverInfo.version (0.1.0a4); receipt bodies keep the receipt contract version 0.1.0.
