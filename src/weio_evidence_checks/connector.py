@@ -11,7 +11,8 @@ import sys
 from typing import Any
 
 SERVER_NAME = "weio-connector-readiness"
-SERVER_VERSION = "0.1.0"
+RECEIPT_VERSION = "0.1.0"  # receipt contract version, independent of the package version
+SERVER_VERSION = "0.1.0a4"  # package version; tests keep it equal to __init__.__version__ and pyproject
 PROTOCOLS = ("2025-11-25", "2025-06-18", "2025-03-26")
 MAX_LINE = 256_000
 SAFE_ID = r"^[A-Za-z0-9][A-Za-z0-9._:/-]{0,127}$"
@@ -157,7 +158,7 @@ def run(arguments: dict[str, Any]) -> dict[str, Any]:
     }
     receipt_body = {
         "plugin": SERVER_NAME,
-        "version": SERVER_VERSION,
+        "version": RECEIPT_VERSION,
         "binding": binding,
         "status": overall,
         "gates": gates,
@@ -215,7 +216,10 @@ def loads(raw: str) -> Any:
 
 
 def serve() -> int:
-    for raw in sys.stdin:
+    for raw_bytes in sys.stdin.buffer:
+        try: raw = raw_bytes.decode("utf-8")
+        except UnicodeDecodeError:
+            print(canonical(error(None, -32700, "Parse error")), flush=True); continue
         if not raw.strip(): continue
         try: response = process(loads(raw))
         except (Invalid, json.JSONDecodeError): response = error(None, -32700, "Parse error")

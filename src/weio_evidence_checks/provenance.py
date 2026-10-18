@@ -11,7 +11,8 @@ import sys
 from typing import Any
 
 SERVER_NAME = "weio-production-provenance"
-SERVER_VERSION = "0.1.0"
+RECEIPT_VERSION = "0.1.0"  # receipt contract version, independent of the package version
+SERVER_VERSION = "0.1.0a4"  # package version; tests keep it equal to __init__.__version__ and pyproject
 PROTOCOLS = ("2025-11-25", "2025-06-18", "2025-03-26")
 MAX_LINE = 256_000
 SAFE_ID = r"^[A-Za-z0-9][A-Za-z0-9._:/-]{0,127}$"
@@ -22,6 +23,7 @@ SECRET_PATTERNS = (
     re.compile(r"(?i)(?:api[_-]?key|client[_-]?secret|access[_-]?token|refresh[_-]?token|password)\s*[:=]"),
     re.compile(r"\b(?:sk|ghp|xox[baprs])[-_][A-Za-z0-9_-]{10,}\b"),
     re.compile(r"-----BEGIN [A-Z ]*PRIVATE KEY-----"),
+    re.compile(r"\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\b"),
 )
 
 
@@ -116,7 +118,7 @@ def run(arguments: dict[str, Any]) -> dict[str, Any]:
     binding = {"work_queue_id": arguments["work_queue_id"], "revision": arguments["revision"], "work_queue_digest": digest(arguments["work_queue_id"]), "revision_digest": digest(arguments["revision"]), "scope_digest": digest(sorted(set(arguments["scope"]))), "idempotency_key": arguments["idempotency_key"], "idempotency_digest": digest(arguments["idempotency_key"]), "input_digest": digest(arguments)}
     body = {
         "plugin": SERVER_NAME,
-        "version": SERVER_VERSION,
+        "version": RECEIPT_VERSION,
         "binding": binding,
         "status": status,
         "layers": layers,
@@ -173,7 +175,10 @@ def loads(raw: str) -> Any:
 
 
 def serve() -> int:
-    for raw in sys.stdin:
+    for raw_bytes in sys.stdin.buffer:
+        try: raw = raw_bytes.decode("utf-8")
+        except UnicodeDecodeError:
+            print(canonical(error(None, -32700, "Parse error")), flush=True); continue
         if not raw.strip(): continue
         try: response = process(loads(raw))
         except (Invalid, json.JSONDecodeError): response = error(None, -32700, "Parse error")
