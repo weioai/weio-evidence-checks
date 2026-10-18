@@ -201,6 +201,16 @@ def stdio_health(arguments: dict[str, Any]) -> None:
     assert replies[1]["result"]["tools"][0]["name"] == TOOL["name"] and not replies[2]["result"]["isError"]
 
 
+# Self-test probes for the path rule in validate(): (check label, scope value, expected text of the Invalid message).
+# A leading "/" already fails the SAFE_ID format rule (first character must be a letter or digit), before the path rule.
+PATH_PROBES = (
+    ("absolute path '/etc/passwd' rejected (format rule: must start with a letter or digit)", "/etc/passwd", "has invalid format"),
+    ("Windows drive path 'C:/unsafe' rejected (path rule)", "C:/unsafe", "not a path or URL"),
+    ("'..' segment 'logs/../secret' rejected (path rule)", "logs/../secret", "not a path or URL"),
+    ("'://' URL 'https://example.com/x' rejected (path rule)", "https://example.com/x", "not a path or URL"),
+)
+
+
 def self_test() -> dict[str, Any]:
     checks = []; first, second = run(fixture()), run(fixture())
     assert first["ok"] and first["receipt_id"] == second["receipt_id"]; checks.append("PASS and deterministic receipt")
@@ -216,9 +226,16 @@ def self_test() -> dict[str, Any]:
     assert process({"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {"protocolVersion": "2025-06-18"}})["result"]["protocolVersion"] == "2025-06-18"
     assert len(process({"jsonrpc": "2.0", "id": 2, "method": "tools/list"})["result"]["tools"]) == 1
     call = process({"jsonrpc": "2.0", "id": 3, "method": "tools/call", "params": {"name": TOOL["name"], "arguments": fixture()}}); assert not call["result"]["isError"]; checks.append("MCP initialize, list, call")
-    path_like = fixture(); path_like["scope"] = ["C:/unsafe"]
-    try: run(path_like); raise AssertionError("path accepted")
-    except Invalid: checks.append("filesystem path and URL inputs rejected")
+    for label, value, reason in PATH_PROBES:
+        probe = fixture(); probe["scope"] = [value]
+        try: run(probe); raise AssertionError(value + " accepted")
+        except Invalid as exc: assert reason in str(exc), str(exc)
+        checks.append(label)
+    from unittest import mock
+    opaque = fixture(); opaque["scope"] = ["logs/run1.log"]
+    with mock.patch("builtins.open", side_effect=AssertionError("label opened")), mock.patch("os.stat", side_effect=AssertionError("label opened")):
+        assert run(opaque)["status"] == "PASS"
+    checks.append("relative label 'logs/run1.log' accepted as an opaque label; open() and os.stat() not called")
     stdio_health(fixture()); checks.append("stdio MCP process health")
     return {"ok": True, "checks": checks, "pass_count": len(checks), "tool_count": 1}
 
