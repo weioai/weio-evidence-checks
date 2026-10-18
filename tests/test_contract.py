@@ -3,9 +3,15 @@ import copy
 import hashlib
 import json
 import os
+import shutil
+import subprocess
+import sys
+import tempfile
+import tomllib
 import unittest
 from unittest import mock
 
+import weio_evidence_checks
 from weio_evidence_checks import connector, provenance
 
 
@@ -191,6 +197,99 @@ class ReceiptRecomputeTests(unittest.TestCase):
         with open(readme, encoding="utf-8") as fh:
             text = fh.read()
         self.assertIn(DOCUMENTED_RECEIPTS["weio-production-provenance"][0], text)
+
+
+INIT_REQUEST = {"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {"protocolVersion": "2025-06-18", "capabilities": {}, "clientInfo": {"name": "t", "version": "1"}}}
+REPO_ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
+
+
+class VersionHygieneTests(unittest.TestCase):
+    def test_initialize_reports_package_version(self):
+        for module in (connector, provenance):
+            with self.subTest(module=module.__name__):
+                reply = module.process(copy.deepcopy(INIT_REQUEST))
+                self.assertEqual(reply["result"]["serverInfo"]["version"], weio_evidence_checks.__version__)
+
+    def test_package_version_matches_pyproject(self):
+        with open(os.path.join(REPO_ROOT, "pyproject.toml"), "rb") as fh:
+            declared = tomllib.load(fh)["project"]["version"]
+        self.assertEqual(weio_evidence_checks.__version__, declared)
+
+    def test_receipt_body_version_is_contract_version(self):
+        for module in (connector, provenance):
+            with self.subTest(module=module.__name__):
+                self.assertEqual(module.RECEIPT_VERSION, "0.1.0")
+                self.assertEqual(module.run(module.fixture())["version"], "0.1.0")
+
+    def test_no_built_artifacts_tracked(self):
+        if not os.path.isdir(os.path.join(REPO_ROOT, ".git")):
+            self.skipTest("not a git checkout")
+        listed = subprocess.run(["git", "ls-files"], cwd=REPO_ROOT, capture_output=True, text=True, check=True).stdout.splitlines()
+        self.assertEqual([name for name in listed if name.endswith((".whl", ".tar.gz"))], [])
+
+    def test_mcpb_layout_single_file_reports_version(self):
+        for module in (connector, provenance):
+            name = module.__name__.rsplit(".", 1)[-1]
+            with self.subTest(module=name), tempfile.TemporaryDirectory() as tmp:
+                os.makedirs(os.path.join(tmp, "server"))
+                script = os.path.join(tmp, "server", name + ".py")
+                shutil.copy(module.__file__, script)
+                done = subprocess.run([sys.executable, "-I", script], input=json.dumps(INIT_REQUEST) + "\n", cwd=tmp, capture_output=True, text=True, timeout=15)
+                self.assertNotIn("Traceback", done.stderr)
+                lines = done.stdout.splitlines()
+                self.assertEqual(len(lines), 1)
+                self.assertEqual(json.loads(lines[0])["result"]["serverInfo"]["version"], weio_evidence_checks.__version__)
+
+
+SECRET_CORPUS = {
+    "bearer": "Bearer " + "A" * 20,
+    "api_key": "api_key=" + "B" * 12,
+    "token": "sk-" + "C" * 16,
+    "ghp": "ghp_" + "D" * 16,
+    "private_key": "-----BEGIN RSA PRIVATE KEY-----",
+    "jwt": "eyJ" + "E" * 10 + "." + "F" * 10 + "." + "G" * 10,
+}
+
+
+class SharedSecretRulesTests(unittest.TestCase):
+    def test_secret_patterns_identical(self):
+        self.assertEqual([p.pattern for p in connector.SECRET_PATTERNS], [p.pattern for p in provenance.SECRET_PATTERNS])
+
+    def test_shared_rejection_corpus(self):
+        for module in (connector, provenance):
+            for name, secret in SECRET_CORPUS.items():
+                for field in ("idempotency_key", "scope"):
+                    with self.subTest(server=module.SERVER_NAME, value=name, field=field):
+                        arguments = module.fixture()
+                        if field == "scope":
+                            arguments["scope"][0] = secret
+                        else:
+                            arguments[field] = secret
+                        reply = module.process({"jsonrpc": "2.0", "id": 1, "method": "tools/call",
+                            "params": {"name": module.TOOL["name"], "arguments": arguments}})
+                        self.assertTrue("error" in reply or reply["result"].get("isError") is True, reply)
+                        self.assertNotIn(secret, json.dumps(reply))
+
+
+class StrictStdinTests(unittest.TestCase):
+    def test_invalid_byte_does_not_stop_server_mcpb_layout(self):
+        ping = json.dumps({"jsonrpc": "2.0", "id": 7, "method": "ping"}).encode() + b"\n"
+        for module in (connector, provenance):
+            name = module.__name__.rsplit(".", 1)[-1]
+            with self.subTest(module=name), tempfile.TemporaryDirectory() as tmp:
+                os.makedirs(os.path.join(tmp, "server"))
+                script = os.path.join(tmp, "server", name + ".py")
+                shutil.copy(module.__file__, script)
+                env = dict(os.environ, PYTHONIOENCODING="utf-8:strict")
+                done = subprocess.run([sys.executable, "-s", script], input=b"\xff\n" + ping, cwd=tmp, env=env, capture_output=True, timeout=15)
+                self.assertNotIn(b"Traceback", done.stderr)
+                self.assertEqual(done.returncode, 0, done.stderr)
+                lines = [json.loads(line) for line in done.stdout.decode("utf-8").splitlines()]
+                self.assertEqual(len(lines), 2, lines)
+                self.assertEqual(lines[0]["error"]["code"], -32700)
+                self.assertIsNone(lines[0]["id"])
+                self.assertEqual(lines[1]["id"], 7)
+                self.assertIn("result", lines[1])
 
 
 if __name__ == "__main__":
