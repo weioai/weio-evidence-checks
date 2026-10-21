@@ -1,0 +1,171 @@
+{
+  "name": "Weekly client-site HTTPS and certificate report (Weio check via RapidAPI)",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "weeks",
+              "triggerAtDay": [
+                1
+              ],
+              "triggerAtHour": 8
+            }
+          ]
+        }
+      },
+      "name": "Every Monday 08:00",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "d1",
+              "name": "domains",
+              "type": "array",
+              "value": "[\"example.com\", \"example.org\"]"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "name": "Client domains (edit me)",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        220,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "fieldToSplitOut": "domains",
+        "options": {
+          "destinationFieldName": "domain"
+        }
+      },
+      "name": "One item per domain",
+      "type": "n8n-nodes-base.splitOut",
+      "typeVersion": 1,
+      "position": [
+        440,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://website-facts-and-https-check.p.rapidapi.com/api/https-check",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "d",
+              "value": "={{ $json.domain }}"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-rapidapi-host",
+              "value": "website-facts-and-https-check.p.rapidapi.com"
+            }
+          ]
+        },
+        "options": {
+          "batching": {
+            "batch": {
+              "batchSize": 1,
+              "batchInterval": 2000
+            }
+          },
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        }
+      },
+      "name": "Check HTTPS (RapidAPI)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        660,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// One row per checked address. Flags anything a visitor would notice, or a certificate ending within WARN_DAYS.\nconst WARN_DAYS = 21;\nconst out = [];\nfor (const item of $input.all()) {\n  const r = item.json;\n  if (!r || r.ok !== true || !Array.isArray(r.results)) {\n    out.push({ json: { domain: r && r.domain || '(unknown)', host: '', status: 'CHECK FAILED', detail: (r && r.error) || 'no result' } });\n    continue;\n  }\n  for (const a of r.results) {\n    const daysLeft = typeof a.expired_days === 'number' ? -a.expired_days : null;\n    const problems = [];\n    if (a.visible === 'interstitial') problems.push('visitors see a full-page privacy warning');\n    if (a.visible === 'not_secure') problems.push('browser shows Not secure');\n    if (daysLeft !== null && daysLeft <= WARN_DAYS) problems.push(daysLeft < 0 ? 'certificate expired' : `certificate ends in ${daysLeft} days`);\n    out.push({ json: {\n      domain: r.domain, host: a.host, status: problems.length ? 'ACTION NEEDED' : 'OK',\n      problems: problems.join('; '), cause: a.cause, browser: a.visible,\n      certificate_valid_until: a.not_after || '', days_left: daysLeft, explanation: a.plain || '',\n    } });\n  }\n}\nout.sort((x, y) => (x.json.status === 'OK') - (y.json.status === 'OK'));\nreturn out;"
+      },
+      "name": "Report rows",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        880,
+        0
+      ]
+    }
+  ],
+  "connections": {
+    "Every Monday 08:00": {
+      "main": [
+        [
+          {
+            "node": "Client domains (edit me)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Client domains (edit me)": {
+      "main": [
+        [
+          {
+            "node": "One item per domain",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "One item per domain": {
+      "main": [
+        [
+          {
+            "node": "Check HTTPS (RapidAPI)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check HTTPS (RapidAPI)": {
+      "main": [
+        [
+          {
+            "node": "Report rows",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {}
+}

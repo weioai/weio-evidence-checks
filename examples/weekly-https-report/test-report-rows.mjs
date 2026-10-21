@@ -1,0 +1,10 @@
+import fs from 'node:fs';
+const [codeFile, rawFile] = process.argv.slice(2);
+const raw = fs.readFileSync(rawFile, 'utf8'); const m = raw.match(/\{[\s\S]*\}/); let rec = JSON.parse(m[0]);
+rec = rec.result?.structuredContent ?? rec.structuredContent ?? rec;
+const ok = { ok: true, ...rec };
+const expiring = JSON.parse(JSON.stringify(ok)); expiring.domain = 'expiring.test'; expiring.results.forEach(r => { r.expired_days = -10; r.visible = 'ok'; });
+const failed = { ok: false, error: 'too many checks from here; try again in a minute', domain: 'failed.test' };
+const $input = { all: () => [ok, expiring, failed].map(json => ({ json })) };
+const rows = new Function('$input', fs.readFileSync(codeFile, 'utf8'))($input);
+for (const r of rows) console.log(JSON.stringify(r.json));
