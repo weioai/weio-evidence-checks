@@ -292,8 +292,6 @@ class StrictStdinTests(unittest.TestCase):
                 self.assertIn("result", lines[1])
 
 
-if __name__ == "__main__":
-    unittest.main()
 
 
 # Proof-sample fixes 2026-11-01 (F1-F4).
@@ -304,6 +302,10 @@ SAFE_SHAPED_SECRETS = {
     "aws_key_id": "AKIAIOSFODNN7EXAMPLE",
     "openai_style": "sk-" + "C" * 16,
     "classic_ghp": "ghp_" + "D" * 16,
+    "underscore_prefixed_restricted": "x_rk_live_" + "A1b2C3d4E5f6G7h8I9j0K1l2",
+    "colon_prefixed_github": "ref:github_pat_11ABCDEFG0123456789_abcdefghijklmnopqrstuv",
+    "underscore_prefixed_aws": "id_AKIAIOSFODNN7EXAMPLE",
+    "aws_with_suffix": "AKIAIOSFODNN7EXAMPLE_x",
 }
 
 
@@ -336,3 +338,7 @@ class ProofSampleFixTests(unittest.TestCase):
         for module in (connector, provenance):
             reply = module.process({"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {"protocolVersion": "2099-01-01"}})
             self.assertEqual(reply["result"]["protocolVersion"], module.PROTOCOLS[0])
+
+
+if __name__ == "__main__":
+    unittest.main()

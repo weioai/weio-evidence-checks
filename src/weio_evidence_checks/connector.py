@@ -21,12 +21,14 @@ SHA256 = r"^[a-f0-9]{64}$"
 SECRET_PATTERNS = (
     re.compile(r"(?i)\b(?:bearer|basic)\s+[A-Za-z0-9._~+/=-]{8,}"),
     re.compile(r"(?i)(?:api[_-]?key|client[_-]?secret|access[_-]?token|refresh[_-]?token|password)\s*[:=]"),
-    re.compile(r"\b(?:sk|ghp|xox[baprs])[-_][A-Za-z0-9_-]{10,}\b"),
+    # Credential shapes. The boundary is any non-alphanumeric character (including "_", ".", ":", "/", "-"),
+    # because the identifier format allows those as separators; \b alone misses "x_rk_live_...".
+    re.compile(r"(?<![A-Za-z0-9])(?:sk|ghp|xox[baprs])[-_][A-Za-z0-9_-]{10,}"),
     re.compile(r"-----BEGIN [A-Z ]*PRIVATE KEY-----"),
-    re.compile(r"\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\b"),
-    re.compile(r"\b(?:rk|sk)_(?:live|test)_[A-Za-z0-9]{10,}"),
-    re.compile(r"\b(?:github_pat_[A-Za-z0-9_]{20,}|gh[opsu]_[A-Za-z0-9]{20,})"),
-    re.compile(r"\b(?:AKIA|ASIA)[0-9A-Z]{16}\b"),
+    re.compile(r"(?<![A-Za-z0-9])eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}"),
+    re.compile(r"(?<![A-Za-z0-9])(?:rk|sk)_(?:live|test)_[A-Za-z0-9]{10,}"),
+    re.compile(r"(?<![A-Za-z0-9])(?:github_pat_[A-Za-z0-9_]{20,}|gh[opsu]_[A-Za-z0-9]{20,})"),
+    re.compile(r"(?<![A-Za-z0-9])(?:AKIA|ASIA)[0-9A-Z]{16}(?![A-Za-z0-9])"),
 )
 
 
