@@ -7,6 +7,10 @@ for (const item of $input.all()) {
     out.push({ json: { domain: r && r.domain || '(unknown)', host: '', status: 'CHECK FAILED', detail: (r && r.error) || 'no result' } });
     continue;
   }
+  if (r.results.length === 0) {
+    out.push({ json: { domain: r.domain || '(unknown)', host: '', status: 'CHECK FAILED', detail: 'no addresses were checked' } });
+    continue;
+  }
   for (const a of r.results) {
     const daysLeft = typeof a.expired_days === 'number' ? -a.expired_days : null;
     const problems = [];

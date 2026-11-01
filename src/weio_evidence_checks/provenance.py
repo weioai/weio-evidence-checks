@@ -24,6 +24,9 @@ SECRET_PATTERNS = (
     re.compile(r"\b(?:sk|ghp|xox[baprs])[-_][A-Za-z0-9_-]{10,}\b"),
     re.compile(r"-----BEGIN [A-Z ]*PRIVATE KEY-----"),
     re.compile(r"\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\b"),
+    re.compile(r"\b(?:rk|sk)_(?:live|test)_[A-Za-z0-9]{10,}"),
+    re.compile(r"\b(?:github_pat_[A-Za-z0-9_]{20,}|gh[opsu]_[A-Za-z0-9]{20,})"),
+    re.compile(r"\b(?:AKIA|ASIA)[0-9A-Z]{16}\b"),
 )
 
 
@@ -147,11 +150,13 @@ def error(identifier: Any, code: int, message: str, data: Any = None) -> dict[st
 def process(message: Any) -> dict[str, Any] | None:
     if not isinstance(message, dict) or message.get("jsonrpc") != "2.0" or not isinstance(message.get("method"), str): return error(message.get("id") if isinstance(message, dict) else None, -32600, "Invalid Request")
     if "id" not in message: return None
+    if not (message["id"] is None or isinstance(message["id"], str) or (isinstance(message["id"], int) and not isinstance(message["id"], bool))):
+        return error(None, -32600, "Invalid Request")
     identifier, method, params = message["id"], message["method"], message.get("params", {})
     if not isinstance(params, dict): return error(identifier, -32602, "Invalid params")
     if method == "initialize":
         protocol = params.get("protocolVersion")
-        if protocol not in PROTOCOLS: return error(identifier, -32602, "Unsupported protocol version")
+        if protocol not in PROTOCOLS: protocol = PROTOCOLS[0]  # MCP lifecycle: answer with a supported version; the client decides
         return {"jsonrpc": "2.0", "id": identifier, "result": {"protocolVersion": protocol, "capabilities": {"tools": {"listChanged": False}}, "serverInfo": {"name": SERVER_NAME, "version": SERVER_VERSION}, "instructions": "Closed-world caller-supplied consistency only; never treat PASS as live, independent, authentic, or approved."}}
     if method == "ping": return {"jsonrpc": "2.0", "id": identifier, "result": {}}
     if method == "tools/list": return {"jsonrpc": "2.0", "id": identifier, "result": {"tools": [TOOL]}}
@@ -180,10 +185,12 @@ def serve() -> int:
         except UnicodeDecodeError:
             print(canonical(error(None, -32700, "Parse error")), flush=True); continue
         if not raw.strip(): continue
-        try: response = process(loads(raw))
-        except (Invalid, json.JSONDecodeError): response = error(None, -32700, "Parse error")
-        except Exception: response = error(None, -32603, "Internal error")
-        if response is not None: print(canonical(response), flush=True)
+        try:
+            response = process(loads(raw))
+            line = canonical(response) if response is not None else None
+        except (Invalid, json.JSONDecodeError): line = canonical(error(None, -32700, "Parse error"))
+        except Exception: line = canonical(error(None, -32603, "Internal error"))
+        if line is not None: print(line, flush=True)
     return 0
 
 

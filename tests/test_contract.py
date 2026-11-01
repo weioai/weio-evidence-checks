@@ -294,3 +294,45 @@ class StrictStdinTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+# Proof-sample fixes 2026-11-01 (F1-F4).
+SAFE_SHAPED_SECRETS = {
+    "stripe_restricted": "rk_live_" + "A1b2C3d4E5f6G7h8I9j0K1l2",
+    "github_fine_grained": "github_pat_11ABCDEFG0123456789_abcdefghijklmnopqrstuv",
+    "github_app": "ghs_" + "a" * 36,
+    "aws_key_id": "AKIAIOSFODNN7EXAMPLE",
+    "openai_style": "sk-" + "C" * 16,
+    "classic_ghp": "ghp_" + "D" * 16,
+}
+
+
+class ProofSampleFixTests(unittest.TestCase):
+    def test_secret_rule_itself_rejects_format_valid_secrets(self):
+        for module in (connector, provenance):
+            for name, secret in SAFE_SHAPED_SECRETS.items():
+                with self.subTest(server=module.SERVER_NAME, value=name):
+                    arguments = module.fixture()
+                    arguments["idempotency_key"] = secret
+                    with self.assertRaises(module.Invalid) as caught:
+                        module.run(arguments)
+                    self.assertIn("appears to contain a secret", str(caught.exception))
+
+    def test_non_finite_or_structured_id_is_refused_not_fatal(self):
+        for module in (connector, provenance):
+            for raw in ('{"jsonrpc":"2.0","id":1e999,"method":"ping"}', '{"jsonrpc":"2.0","id":{"a":1},"method":"ping"}', '{"jsonrpc":"2.0","id":1.5,"method":"ping"}'):
+                with self.subTest(server=module.SERVER_NAME, raw=raw):
+                    reply = module.process(module.loads(raw))
+                    self.assertEqual(reply["error"]["code"], -32600)
+                    self.assertIsNone(reply["id"])
+            completed = subprocess.run([sys.executable, module.__file__],
+                input='{"jsonrpc":"2.0","id":1e999,"method":"ping"}\n{"jsonrpc":"2.0","id":2,"method":"ping"}\n',
+                text=True, capture_output=True, timeout=10)
+            self.assertEqual(completed.returncode, 0, completed.stderr)
+            lines = [json.loads(line) for line in completed.stdout.splitlines()]
+            self.assertEqual(lines[-1], {"jsonrpc": "2.0", "id": 2, "result": {}})
+
+    def test_unknown_protocol_version_is_negotiated(self):
+        for module in (connector, provenance):
+            reply = module.process({"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {"protocolVersion": "2099-01-01"}})
+            self.assertEqual(reply["result"]["protocolVersion"], module.PROTOCOLS[0])
